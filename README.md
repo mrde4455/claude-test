@@ -14,7 +14,7 @@ and embeds the flag images from `assets/flags`.
 
 The icon is the flag of the country your IP is in. Hover for the full address,
 left-click to copy it, right-click for **Refresh now** / **Exit**. It refreshes
-every 30 seconds (`RefreshSeconds` in the source).
+every 5 seconds (`RefreshSeconds` in the source).
 
 Windows may hide new tray icons under the `^` arrow. Drag the icon onto the
 taskbar to keep it visible.

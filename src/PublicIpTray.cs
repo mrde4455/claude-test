@@ -15,7 +15,7 @@ using System.Windows.Forms;
 // Hover for the IP and country; left-click copies the IP; right-click for Refresh / Exit.
 static class PublicIpTray
 {
-    const int RefreshSeconds = 30;
+    const int RefreshSeconds = 5;
     static readonly string[] IpEndpoints = {
         "https://api.ipify.org", "https://checkip.amazonaws.com", "https://icanhazip.com"
     };
