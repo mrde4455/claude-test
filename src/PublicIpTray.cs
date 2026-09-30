@@ -14,7 +14,7 @@ using System.Windows.Forms;
 // Hover for the IP and country; left-click copies the IP; right-click for Refresh / Exit.
 static class PublicIpTray
 {
-    const int RefreshMinutes = 5;
+    const int RefreshSeconds = 30;
     static readonly string[] IpEndpoints = {
         "https://api.ipify.org", "https://checkip.amazonaws.com", "https://icanhazip.com"
     };
@@ -33,6 +33,7 @@ static class PublicIpTray
     static System.Windows.Forms.Timer timer;
     static string ip;
     static int busy;
+    static string lastIp, lastCountry; // country is only re-looked-up when the IP changes
 
     [STAThread]
     static void Main()
@@ -61,7 +62,7 @@ static class PublicIpTray
             notify.Text = "Public IP: checking...";
             notify.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) CopyIp(); };
 
-            timer = new System.Windows.Forms.Timer { Interval = RefreshMinutes * 60 * 1000 };
+            timer = new System.Windows.Forms.Timer { Interval = RefreshSeconds * 1000 };
             timer.Tick += delegate { Refresh(); };
             timer.Start();
 
@@ -103,6 +104,7 @@ static class PublicIpTray
             if (r != null && Regex.IsMatch(r, "^[0-9a-fA-F\\.:]+$")) { addr = r; break; }
         }
         if (addr == null) return new string[] { null, null };
+        if (addr == lastIp && lastCountry != null) return new string[] { addr, lastCountry };
         foreach (var url in CountryEndpoints)
         {
             string r = Fetch(url);
@@ -114,6 +116,8 @@ static class PublicIpTray
                 break;
             }
         }
+        lastIp = addr;
+        lastCountry = cc;
         return new string[] { addr, cc };
     }
 

@@ -12,7 +12,7 @@ and embeds the flag images from `assets/flags`.
 
 The icon is the flag of the country your IP is in. Hover for the full address,
 left-click to copy it, right-click for **Refresh now** / **Exit**. It refreshes
-every 5 minutes (`RefreshMinutes` in the source).
+every 30 seconds (`RefreshSeconds` in the source).
 
 Windows may hide new tray icons under the `^` arrow. Drag the icon onto the
 taskbar to keep it visible.
@@ -23,6 +23,7 @@ Press `Win+R`, run `shell:startup`, and put a shortcut to `PublicIpTray.exe` the
 
 ## Notes
 
+- The country is only looked up again when your IP changes, to stay within the free limits of the lookup services.
 - Only one instance runs at a time.
 - If a country has no flag image, the icon shows its two-letter code instead.
 - Flag images are from the public-domain famfamfam set.
