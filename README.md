@@ -5,8 +5,13 @@ notification area (system tray).
 
 ## Use
 
-1. Download `PublicIpTray.ps1` and `PublicIpTray.vbs` into the same folder.
-2. Double-click `PublicIpTray.vbs` (runs with no console window).
+Double-click `PublicIpTray.exe`. It needs .NET Framework 4, which is built in to Windows 10/11.
+
+(Alternative, no exe: put `PublicIpTray.ps1` and `PublicIpTray.vbs` in one folder and double-click the `.vbs`.)
+
+Rebuild the exe from `src/PublicIpTray.cs` with:
+`mcs -target:winexe -r:System.Windows.Forms.dll -r:System.Drawing.dll -out:PublicIpTray.exe src/PublicIpTray.cs`
+(or `csc` on Windows, from `C:\Windows\Microsoft.NET\Framework64\v4.0.30319`).
 
 The icon shows the last number of your IP. Hover for the full address,
 left-click to copy it, right-click for **Refresh now** / **Exit**. It refreshes
@@ -17,9 +22,9 @@ taskbar to keep it visible.
 
 ## Start with Windows
 
-Press `Win+R`, run `shell:startup`, and put a shortcut to `PublicIpTray.vbs` there.
+Press `Win+R`, run `shell:startup`, and put a shortcut to `PublicIpTray.exe` there.
 
 ## Notes
 
-- Requires Windows PowerShell 5.1 (built in to Windows 10/11). No install or compile step.
+- Only one instance runs at a time.
 - The IP is fetched from api.ipify.org, falling back to checkip.amazonaws.com and icanhazip.com.
