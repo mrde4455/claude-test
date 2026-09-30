@@ -23,6 +23,7 @@ Press `Win+R`, run `shell:startup`, and put a shortcut to `PublicIpTray.exe` the
 
 ## Notes
 
+- When your IP changes, a Windows notification shows the old and new address. (It stays silent on startup and while you're offline; if Windows Focus Assist / Do Not Disturb is on, it may be suppressed.)
 - The country is only looked up again when your IP changes, to stay within the free limits of the lookup services.
 - Only one instance runs at a time.
 - If a country has no flag image, the icon shows its two-letter code instead.

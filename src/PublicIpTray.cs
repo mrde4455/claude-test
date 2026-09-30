@@ -33,6 +33,7 @@ static class PublicIpTray
     static System.Windows.Forms.Timer timer;
     static string ip;
     static int busy;
+    static string previousIp; // last successfully detected IP, kept across offline periods
     static string lastIp, lastCountry; // country is only re-looked-up when the IP changes
 
     [STAThread]
@@ -124,6 +125,16 @@ static class PublicIpTray
     static void Apply(string addr, string cc)
     {
         ip = addr;
+        if (addr != null)
+        {
+            if (previousIp != null && previousIp != addr)
+            {
+                string n = CountryName(cc);
+                notify.ShowBalloonTip(8000, "Public IP changed",
+                    previousIp + " \u2192 " + addr + (n != null ? "\n" + n : ""), ToolTipIcon.Info);
+            }
+            previousIp = addr;
+        }
         string tip;
         Icon icon = null;
         if (ip != null)
