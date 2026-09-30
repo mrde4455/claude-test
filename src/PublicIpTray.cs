@@ -36,6 +36,7 @@ static class PublicIpTray
     static ToolStripMenuItem copyItem;
     static System.Windows.Forms.Timer timer;
     static string ip;
+    static string country;
     static int busy;
     static string previousIp; // last successfully detected IP, kept across offline periods
     static string lastIp, lastCountry; // country is only re-looked-up when the IP changes
@@ -55,6 +56,9 @@ static class PublicIpTray
             copyItem = new ToolStripMenuItem("Copy IP", null, delegate { CopyIp(); });
             menu.Items.Add(copyItem);
             menu.Items.Add(new ToolStripMenuItem("Refresh now", null, delegate { Refresh(); }));
+            menu.Items.Add(new ToolStripMenuItem("Test notification", null, delegate {
+                ShowChangeToast("203.0.113.5", ip ?? "198.51.100.7", country);
+            }));
             var startup = new ToolStripMenuItem("Start with Windows") { Checked = IsAutoStart() };
             startup.Click += delegate { startup.Checked = SetAutoStart(!startup.Checked); };
             menu.Items.Add(startup);
@@ -97,7 +101,10 @@ static class PublicIpTray
         try
         {
             using (var wc = new WebClient())
+            {
+                wc.CachePolicy = new System.Net.Cache.RequestCachePolicy(System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
                 return wc.DownloadString(url).Trim();
+            }
         }
         catch { return null; }
     }
@@ -132,13 +139,12 @@ static class PublicIpTray
     static void Apply(string addr, string cc)
     {
         ip = addr;
+        country = cc;
         if (addr != null)
         {
             if (previousIp != null && previousIp != addr)
             {
-                string n = CountryName(cc);
-                notify.ShowBalloonTip(8000, "Public IP changed",
-                    previousIp + " \u2192 " + addr + (n != null ? "\n" + n : ""), ToolTipIcon.Info);
+                ShowChangeToast(previousIp, addr, cc);
             }
             previousIp = addr;
         }
@@ -199,8 +205,21 @@ static class PublicIpTray
     static void CopyIp()
     {
         if (ip == null) return;
-        try { Clipboard.SetText(ip); notify.ShowBalloonTip(1500, "Public IP", "Copied " + ip, ToolTipIcon.Info); }
+        try { Clipboard.SetText(ip); Toast.Show("Copied to clipboard", ip, null, 2000); }
         catch { }
+    }
+
+    static void ShowChangeToast(string oldIp, string newIp, string cc)
+    {
+        string n = CountryName(cc);
+        Toast.Show("Public IP changed", oldIp + "  \u2192  " + newIp + (n != null ? "\n" + n : ""), cc, 8000);
+    }
+
+    internal static Bitmap LoadFlag(string cc)
+    {
+        if (cc == null) return null;
+        using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("flag." + cc))
+            return stream == null ? null : new Bitmap(stream);
     }
 
     static Icon ToIcon(Bitmap bmp)
@@ -214,10 +233,9 @@ static class PublicIpTray
     // Draws the embedded flag PNG (16x11) scaled up and centered on a 32x32 canvas.
     static Icon FlagIcon(string cc)
     {
-        using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("flag." + cc))
+        using (var flag = LoadFlag(cc))
         {
-            if (stream == null) return null;
-            using (var flag = new Bitmap(stream))
+            if (flag == null) return null;
             using (var bmp = new Bitmap(32, 32))
             using (var g = Graphics.FromImage(bmp))
             {
@@ -242,5 +260,83 @@ static class PublicIpTray
             g.DrawString(text, font, Brushes.White, new RectangleF(0, 0, 32, 32), fmt);
             return ToIcon(bmp);
         }
+    }
+}
+
+// Small always-on-top popup in the bottom-right corner. Unlike Windows balloon
+// notifications it doesn't depend on Focus Assist or per-app notification settings.
+class Toast : Form
+{
+    static Toast current;
+    readonly string title, body;
+    readonly Bitmap flag;
+    readonly System.Windows.Forms.Timer life = new System.Windows.Forms.Timer();
+
+    public static void Show(string title, string body, string cc, int ms)
+    {
+        if (current != null) current.Close();
+        current = new Toast(title, body, cc, ms);
+        current.Show();
+    }
+
+    Toast(string title, string body, string cc, int ms)
+    {
+        this.title = title; this.body = body;
+        flag = PublicIpTray.LoadFlag(cc);
+        FormBorderStyle = FormBorderStyle.None;
+        ShowInTaskbar = false;
+        TopMost = true;
+        StartPosition = FormStartPosition.Manual;
+        BackColor = Color.FromArgb(32, 32, 36);
+        DoubleBuffered = true;
+        Size = new Size(340, 86);
+        var area = Screen.PrimaryScreen.WorkingArea;
+        Location = new Point(area.Right - Width - 16, area.Bottom - Height - 16);
+        Click += delegate { Close(); };
+        life.Interval = ms;
+        life.Tick += delegate { Close(); };
+        life.Start();
+    }
+
+    protected override bool ShowWithoutActivation { get { return true; } }
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.ExStyle |= 0x08000000 | 0x00000080 | 0x00000008; // NOACTIVATE | TOOLWINDOW | TOPMOST
+            return cp;
+        }
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        using (var pen = new Pen(Color.FromArgb(70, 70, 78)))
+            g.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+        int x = 16;
+        if (flag != null)
+        {
+            int w = 40, h = Math.Max(1, flag.Height * w / flag.Width);
+            g.DrawImage(flag, new Rectangle(16, (Height - h) / 2, w, h));
+            x = 68;
+        }
+        using (var tf = new Font("Segoe UI", 10, FontStyle.Bold))
+        using (var bf = new Font("Segoe UI", 10))
+        {
+            g.DrawString(title, tf, Brushes.White, x, 12);
+            g.DrawString(body, bf, Brushes.Gainsboro, new RectangleF(x, 36, Width - x - 10, Height - 40));
+        }
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        life.Stop(); life.Dispose();
+        if (flag != null) flag.Dispose();
+        if (current == this) current = null;
+        base.OnFormClosed(e);
     }
 }

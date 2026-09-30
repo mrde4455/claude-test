@@ -25,7 +25,7 @@ Tick/untick **Start with Windows** in the installer, or toggle it any time from 
 
 ## Notes
 
-- When your IP changes, a Windows notification shows the old and new address. (It stays silent on startup and while you're offline; if Windows Focus Assist / Do Not Disturb is on, it may be suppressed.)
+- When your IP changes, a small popup appears in the bottom-right corner with the old and new address and country (click it to dismiss, or it closes after 8 seconds). It stays silent on startup and while you're offline. Use **Test notification** in the tray menu to preview it.
 - The country is only looked up again when your IP changes, to stay within the free limits of the lookup services.
 - Only one instance runs at a time.
 - If a country has no flag image, the icon shows its two-letter code instead.
