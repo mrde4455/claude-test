@@ -1,19 +1,29 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Globalization;
 using System.Net;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
 
-// Shows the current public IP address as a system tray icon.
-// Left-click copies it; right-click for Refresh / Exit.
+// Shows the country flag of your current public IP address as a system tray icon.
+// Hover for the IP and country; left-click copies the IP; right-click for Refresh / Exit.
 static class PublicIpTray
 {
     const int RefreshMinutes = 5;
-    static readonly string[] Endpoints = {
+    static readonly string[] IpEndpoints = {
         "https://api.ipify.org", "https://checkip.amazonaws.com", "https://icanhazip.com"
     };
+    // Each returns the caller's two-letter country code, as plain text or JSON.
+    static readonly string[] CountryEndpoints = {
+        "https://ipapi.co/country/", "https://ipinfo.io/country", "https://api.country.is/"
+    };
+    static readonly Regex CountryPattern =
+        new Regex("^([A-Za-z]{2})$|\"country\"\\s*:\\s*\"([A-Za-z]{2})\"");
 
     [DllImport("user32.dll")]
     static extern bool DestroyIcon(IntPtr handle);
@@ -47,7 +57,7 @@ static class PublicIpTray
                 Application.Exit();
             }));
 
-            notify = new NotifyIcon { ContextMenuStrip = menu, Visible = true, Icon = MakeIcon("...") };
+            notify = new NotifyIcon { ContextMenuStrip = menu, Visible = true, Icon = MakeTextIcon("...") };
             notify.Text = "Public IP: checking...";
             notify.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) CopyIp(); };
 
@@ -56,8 +66,7 @@ static class PublicIpTray
             timer.Start();
 
             // Marshals lookup results back to the UI thread.
-            var ctx = new WindowsFormsSynchronizationContext();
-            SynchronizationContext.SetSynchronizationContext(ctx);
+            SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
             Refresh();
 
             Application.Run();
@@ -69,48 +78,75 @@ static class PublicIpTray
         if (Interlocked.Exchange(ref busy, 1) == 1) return;
         var ui = SynchronizationContext.Current;
         ThreadPool.QueueUserWorkItem(delegate {
-            string result = Lookup();
-            ui.Post(delegate { busy = 0; Apply(result); }, null);
+            var result = Lookup();
+            ui.Post(delegate { busy = 0; Apply(result[0], result[1]); }, null);
         });
     }
 
-    static string Lookup()
+    static string Fetch(string url)
     {
-        foreach (var url in Endpoints)
+        try
         {
-            try
-            {
-                using (var wc = new WebClient())
-                {
-                    string r = wc.DownloadString(url).Trim();
-                    if (System.Text.RegularExpressions.Regex.IsMatch(r, "^[0-9a-fA-F\\.:]+$")) return r;
-                }
-            }
-            catch { }
+            using (var wc = new WebClient())
+                return wc.DownloadString(url).Trim();
         }
-        return null;
+        catch { return null; }
     }
 
-    static void Apply(string result)
+    // Returns { ip, countryCode }; either may be null.
+    static string[] Lookup()
     {
-        ip = result;
-        string label, tip;
+        string addr = null, cc = null;
+        foreach (var url in IpEndpoints)
+        {
+            string r = Fetch(url);
+            if (r != null && Regex.IsMatch(r, "^[0-9a-fA-F\\.:]+$")) { addr = r; break; }
+        }
+        if (addr == null) return new string[] { null, null };
+        foreach (var url in CountryEndpoints)
+        {
+            string r = Fetch(url);
+            if (r == null) continue;
+            var m = CountryPattern.Match(r);
+            if (m.Success)
+            {
+                cc = (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value).ToLowerInvariant();
+                break;
+            }
+        }
+        return new string[] { addr, cc };
+    }
+
+    static void Apply(string addr, string cc)
+    {
+        ip = addr;
+        string tip;
+        Icon icon = null;
         if (ip != null)
         {
-            label = ip.Contains(".") ? ip.Substring(ip.LastIndexOf('.') + 1) : "6";
-            tip = "Public IP: " + ip;
+            string name = CountryName(cc);
+            tip = "Public IP: " + ip + (name != null ? " (" + name + ")" : "");
+            if (cc != null) icon = FlagIcon(cc);
+            if (icon == null) icon = MakeTextIcon(cc != null ? cc.ToUpperInvariant() : "IP");
         }
         else
         {
-            label = "?";
             tip = "Public IP: unavailable";
+            icon = MakeTextIcon("?");
         }
         var old = notify.Icon;
-        notify.Icon = MakeIcon(label);
+        notify.Icon = icon;
         if (old != null) old.Dispose();
         notify.Text = tip.Length > 63 ? tip.Substring(0, 63) : tip;
         copyItem.Text = ip != null ? "Copy IP (" + ip + ")" : "Copy IP";
         copyItem.Enabled = ip != null;
+    }
+
+    static string CountryName(string cc)
+    {
+        if (cc == null) return null;
+        try { return new RegionInfo(cc.ToUpperInvariant()).EnglishName; }
+        catch { return cc.ToUpperInvariant(); }
     }
 
     static void CopyIp()
@@ -120,7 +156,34 @@ static class PublicIpTray
         catch { }
     }
 
-    static Icon MakeIcon(string text)
+    static Icon ToIcon(Bitmap bmp)
+    {
+        IntPtr h = bmp.GetHicon();
+        var icon = (Icon)Icon.FromHandle(h).Clone();
+        DestroyIcon(h);
+        return icon;
+    }
+
+    // Draws the embedded flag PNG (16x11) scaled up and centered on a 32x32 canvas.
+    static Icon FlagIcon(string cc)
+    {
+        using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("flag." + cc))
+        {
+            if (stream == null) return null;
+            using (var flag = new Bitmap(stream))
+            using (var bmp = new Bitmap(32, 32))
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                int w = 30, h = Math.Max(1, flag.Height * w / flag.Width);
+                g.DrawImage(flag, new Rectangle((32 - w) / 2, (32 - h) / 2, w, h));
+                return ToIcon(bmp);
+            }
+        }
+    }
+
+    static Icon MakeTextIcon(string text)
     {
         using (var bmp = new Bitmap(32, 32))
         using (var g = Graphics.FromImage(bmp))
@@ -130,10 +193,7 @@ static class PublicIpTray
             g.Clear(Color.FromArgb(30, 90, 200));
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             g.DrawString(text, font, Brushes.White, new RectangleF(0, 0, 32, 32), fmt);
-            IntPtr h = bmp.GetHicon();
-            var icon = (Icon)Icon.FromHandle(h).Clone();
-            DestroyIcon(h);
-            return icon;
+            return ToIcon(bmp);
         }
     }
 }
