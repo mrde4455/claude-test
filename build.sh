@@ -9,3 +9,4 @@ done
 mcs -target:winexe -platform:anycpu -optimize+ \
   -r:System.Windows.Forms.dll -r:System.Drawing.dll \
   $res -out:PublicIpTray.exe src/PublicIpTray.cs
+makensis -V2 installer.nsi

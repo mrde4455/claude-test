@@ -7,6 +7,7 @@ using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using Microsoft.Win32;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -24,6 +25,9 @@ static class PublicIpTray
     };
     static readonly Regex CountryPattern =
         new Regex("^([A-Za-z]{2})$|\"country\"\\s*:\\s*\"([A-Za-z]{2})\"");
+
+    const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    const string RunValue = "PublicIpTray";
 
     [DllImport("user32.dll")]
     static extern bool DestroyIcon(IntPtr handle);
@@ -51,6 +55,9 @@ static class PublicIpTray
             copyItem = new ToolStripMenuItem("Copy IP", null, delegate { CopyIp(); });
             menu.Items.Add(copyItem);
             menu.Items.Add(new ToolStripMenuItem("Refresh now", null, delegate { Refresh(); }));
+            var startup = new ToolStripMenuItem("Start with Windows") { Checked = IsAutoStart() };
+            startup.Click += delegate { startup.Checked = SetAutoStart(!startup.Checked); };
+            menu.Items.Add(startup);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(new ToolStripMenuItem("Exit", null, delegate {
                 timer.Stop();
@@ -162,6 +169,31 @@ static class PublicIpTray
         if (cc == null) return null;
         try { return new RegionInfo(cc.ToUpperInvariant()).EnglishName; }
         catch { return cc.ToUpperInvariant(); }
+    }
+
+    static bool IsAutoStart()
+    {
+        try
+        {
+            using (var k = Registry.CurrentUser.OpenSubKey(RunKey))
+                return k != null && k.GetValue(RunValue) != null;
+        }
+        catch { return false; }
+    }
+
+    // Returns the resulting state (false if the registry write failed).
+    static bool SetAutoStart(bool enable)
+    {
+        try
+        {
+            using (var k = Registry.CurrentUser.CreateSubKey(RunKey))
+            {
+                if (enable) k.SetValue(RunValue, "\"" + Application.ExecutablePath + "\"");
+                else k.DeleteValue(RunValue, false);
+            }
+            return enable;
+        }
+        catch { return IsAutoStart(); }
     }
 
     static void CopyIp()

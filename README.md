@@ -5,9 +5,11 @@ in the taskbar notification area (system tray). Hover over it to see the IP and 
 
 ## Use
 
-Double-click `PublicIpTray.exe`. It needs .NET Framework 4, which is built in to Windows 10/11.
+**Install:** run `PublicIpTray-Setup.exe`. It installs for your user only (no admin rights), adds a Start Menu shortcut, and by default starts the app automatically when you sign in to Windows. Uninstall from Settings > Apps.
 
-Rebuild the exe with `./build.sh` (needs Mono's `mcs`); it compiles `src/PublicIpTray.cs`
+**Portable:** or just double-click `PublicIpTray.exe`. It needs .NET Framework 4, which is built in to Windows 10/11.
+
+Rebuild the exe and installer with `./build.sh` (needs Mono's `mcs` and `makensis`); it compiles `src/PublicIpTray.cs`
 and embeds the flag images from `assets/flags`.
 
 The icon is the flag of the country your IP is in. Hover for the full address,
@@ -19,7 +21,7 @@ taskbar to keep it visible.
 
 ## Start with Windows
 
-Press `Win+R`, run `shell:startup`, and put a shortcut to `PublicIpTray.exe` there.
+Tick/untick **Start with Windows** in the installer, or toggle it any time from the tray icon's right-click menu.
 
 ## Notes
 
